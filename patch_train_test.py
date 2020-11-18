@@ -126,12 +126,22 @@ def load_pickle(pickle_file):
         pickle_data = pickle.load(f)
     return pickle_data
 
-def get_iterative_covariance(data):
+'''
+this function computer the correlation matrix using outer product of central patch feature (data[0:feat_num]) and 
+neighbor node feature
+and coputer the sum of outer product matrices for each interation
+data: combined flattened features of all the nodes together
+'''
+def get_iterative_correlation(data):
     global summ
     outer = np.outer(data[0:feat_num], data)
     summ = np.add(summ, outer)
 
 # ##### Generate connection strength for each radius
+'''
+f_map: features of an image
+XY_coord: coordinates of the neighbor patches
+'''
 def get_connection_list(f_map, XY_coord):
     global counter
     row = random.sample(range(r, f_map.shape[0] - r), 10)
@@ -155,6 +165,9 @@ def get_connection_list(f_map, XY_coord):
             if not np.isnan(n_f).any():
                 counter = counter + 1
                 get_iterative_covariance(vall_list)
+'''
+computes n k*k outer product matrices from summ
+'''
 
 def get_expectation(summ):
     global exp_sum, mat_cov
@@ -162,6 +175,11 @@ def get_expectation(summ):
         mat_cov[idx,:,:] = summ[:,(idx) * feat_num: (idx+1) * feat_num]
     exp_sum = np.add(exp_sum, mat_cov)
 
+'''
+f_map: features of patches in an image
+node_feat_arr : expected correlation matrix
+XY_coord : coodinates of central and neighbor patches  
+'''
 def prediction(f_map, node_feat_arr, XY_coord):
     global N, sumError1, sumSquare1, sumError2, sumSquare2
     inverse = np.linalg.inv(node_feat_arr[0,:,:])
@@ -173,19 +191,13 @@ def prediction(f_map, node_feat_arr, XY_coord):
             temp2 = []
             temp3 = []
             c_f = f_map[i, j]
-            #c_f = np.zeros_like(c_f_0)
-            #c_f[np.argmax(np.abs(c_f_0))] = c_f_0[np.argmax(np.abs(c_f_0))]
             c_f = c_f - np.min(c_f)
-            #c_f = c_f - np.mean(c_f)
             c_f = c_f / np.linalg.norm(c_f)
-            #print("central node:", c_f)
-            if np.isnan(c_f).any():
+            if np.isnan(c_f).any(): # doesnot compute if there is any nan in feature vector
                 continue
             temp1.append(c_f)
             for k in range(XY_coord.shape[0]):
                 n_f = f_map[i + XY_coord[k, 0], j + XY_coord[k, 1]]
-                #n_f = np.zeros_like(n_f_0)
-                #n_f[np.argmax(np.abs(n_f_0))] = n_f_0[np.argmax(np.abs(n_f_0))]
                 n_f = n_f - np.min(n_f)
                 n_f = n_f / np.linalg.norm(n_f)
                 if np.isnan(n_f).any():
@@ -193,7 +205,7 @@ def prediction(f_map, node_feat_arr, XY_coord):
                 temp1.append(n_f)
             if not np.isnan(n_f).any():
                 for l in range(len(node_feat_arr)):
-                    W = np.matmul(inverse, node_feat_arr[l,:,:])
+                    W = np.matmul(inverse, node_feat_arr[l,:,:]) 
                     result = np.matmul(W, np.transpose(c_f))
                     result = result.tolist()
                     result = result/np.linalg.norm(result)
@@ -255,7 +267,6 @@ m2 = []
 s1 = []
 s2 = []
 for r in list_rad:
-    break
     N = 0
     sumError1 = 0
     sumSquare1 = 0
@@ -265,19 +276,6 @@ for r in list_rad:
     fname = "./multipl_xy_9_full_1k_allpos_nomean/rad" + str(r) + "xy_full.pkl"
     with open(fname,'rb') as f:
         node_feat_arr = pickle.load(f)
-
-    #I = np.identity(feat_num)
-    #node_feat_arr = node_feat_arr * I
-
-    #mat = []
-    #for i in node_feat_arr:
-    #    row = []
-    #    for j in i:
-    #       temp = np.zeros_like(j)
-    #       temp[np.argmax(j)] = j[np.argmax(j)]
-    #       row.append(temp)
-    #    mat.append(row)
-    #node_feat_arr = np.array(mat)
 
     theta = np.pi / feat_num
     n = int(2*np.pi / theta)
@@ -300,10 +298,8 @@ for r in list_rad:
 
     print("Working for radius:", r)
     print("Euclidean Error1: ************")
-    #print("Mean1:", mean1)
-    #print("Standard Deviation 1:", std1)
 
-    mean1 = np.mean(mean1[1:])
+    mean1 = np.mean(mean1[1:]) #comute mean and st of prediction error of features of neighbor patch
     std1 = np.mean(std1[1:])
     
     m1.append(mean1)
@@ -317,9 +313,6 @@ for r in list_rad:
 
     except Exception as e:
         print("I came here", e)
-
-    #print("Mean2:", mean2)
-    #print("Standard Deviation 2:", std2)
 
     mean2 = np.mean(mean2[1:])
     std2 = np.mean(std2[1:])
